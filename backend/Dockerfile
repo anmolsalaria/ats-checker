@@ -12,10 +12,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     gcc \
     g++ \
+    gfortran \
     libopenblas-dev \
     liblapack-dev \
-    libatlas-base-dev \
-    libatlas3-base \
+    libblas-dev \
     git \
     curl \
     && rm -rf /var/lib/apt/lists/*
