@@ -24,7 +24,16 @@ export default function RootLayout({
         <footer className="border-t border-gray-200 bg-white py-6 text-center text-sm text-gray-500">
           <p>
             &copy; {new Date().getFullYear()} AI ATS Resume Analyzer. Built for
-            job seekers.
+            job seekers. &nbsp; Developed by{' '}
+            <a
+              href="https://www.linkedin.com/in/anmol-salaria-b2164028a/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary-600 hover:underline"
+            >
+              Anmol Salaria
+            </a>
+            .
           </p>
         </footer>
       </body>
