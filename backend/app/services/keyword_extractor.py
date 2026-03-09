@@ -1,13 +1,16 @@
-"""NLP processing service — rewritten for accurate keyword extraction.
+"""Strict keyword extraction service (Feature 1).
 
-Changes from v1:
-- Aggressive filtering: drops dates, numbers, generic nouns, short tokens
-- Uses curated skill dictionary for detection
-- Normalised, deduplicated, lowercase output
-- spaCy noun-chunk extraction with strict quality filter
-- TF-IDF only retains high-value terms
-- Caches the spaCy model for performance (F9)
+Pipeline:
+1. Text cleaning (URLs, emails, dates, numbers, special chars)
+2. Dictionary skill scan (highest priority)
+3. spaCy noun-chunk extraction (strict filter)
+4. TF-IDF top-term extraction (strict filter)
+5. All outputs pass through quality gate
+
+Ensures NO junk phrases like "a sweat", "flow massive", "the highways".
 """
+
+from __future__ import annotations
 
 import logging
 import re
@@ -81,8 +84,8 @@ def _load_spacy_model():
         return spacy.load(settings.SPACY_MODEL)
 
 
-class NLPProcessor:
-    """Handles NLP operations for resume and job description analysis."""
+class KeywordExtractor:
+    """Extracts meaningful, deduplicated keywords with strict filtering."""
 
     def __init__(self):
         self.nlp = _load_spacy_model()
@@ -91,14 +94,14 @@ class NLPProcessor:
         self.tfidf = TfidfVectorizer(
             max_features=200,
             stop_words="english",
-            ngram_range=(1, 3),
+            ngram_range=(1, 2),
         )
 
     # ------------------------------------------------------------------
     # Text cleaning
     # ------------------------------------------------------------------
     def preprocess_text(self, text: str) -> str:
-        """Clean and normalise text."""
+        """Clean and normalise text for analysis."""
         text = text.lower()
         text = _URL_RE.sub("", text)
         text = _EMAIL_RE.sub("", text)
@@ -125,24 +128,33 @@ class NLPProcessor:
             return False
         if all(c.isdigit() or c in ".,%+-/" for c in t):
             return False
+        # Reject if ANY word in a multi-word phrase is a stopword
+        words = t.split()
+        if len(words) > 2:
+            return False
+        if any(w in self.stop_words or w in GENERIC_STOPWORDS for w in words):
+            # Exception: allow known multi-word skills
+            if t not in self.all_skills:
+                return False
         return True
 
     # ------------------------------------------------------------------
-    # Core keyword extraction (Feature 1 rewrite)
+    # Core extraction (Feature 1)
     # ------------------------------------------------------------------
     def extract_keywords(self, text: str) -> list[str]:
         """Extract meaningful, deduplicated keywords.
 
         Pipeline:
         1. Dictionary skill scan (highest priority)
-        2. spaCy noun-chunk extraction (filtered)
-        3. TF-IDF top-term extraction (filtered)
+        2. Soft-skill scan
+        3. spaCy noun-chunk extraction (filtered)
+        4. TF-IDF top-term extraction (filtered)
         All outputs pass through _is_valid_keyword.
         """
         cleaned = self.preprocess_text(text)
         keywords: set[str] = set()
 
-        # 1. Dictionary skills
+        # 1. Dictionary skills (highest quality)
         keywords.update(self._scan_skills(cleaned))
 
         # 2. Soft skills
@@ -153,8 +165,11 @@ class NLPProcessor:
         for chunk in doc.noun_chunks:
             ct = chunk.text.strip()
             words_in_chunk = ct.split()
-            if 1 <= len(words_in_chunk) <= 3 and self._is_valid_keyword(ct):
-                if not all(w in GENERIC_STOPWORDS or w in self.stop_words for w in words_in_chunk):
+            if 1 <= len(words_in_chunk) <= 2 and self._is_valid_keyword(ct):
+                if not all(
+                    w in GENERIC_STOPWORDS or w in self.stop_words
+                    for w in words_in_chunk
+                ):
                     keywords.add(ct)
 
         # 4. TF-IDF top terms (filtered)
@@ -184,7 +199,7 @@ class NLPProcessor:
         return sorted(cleaned_kws)
 
     # ------------------------------------------------------------------
-    # Dictionary-based skill scanning
+    # Dictionary-based scanning
     # ------------------------------------------------------------------
     def _scan_skills(self, text_lower: str) -> set[str]:
         """Scan text for known technical skills from the curated DB."""
@@ -205,7 +220,7 @@ class NLPProcessor:
         return found
 
     # ------------------------------------------------------------------
-    # Convenience wrappers
+    # Specialised extraction helpers
     # ------------------------------------------------------------------
     def extract_technical_skills(self, text: str) -> list[str]:
         """Extract only known technical skills."""
@@ -216,7 +231,7 @@ class NLPProcessor:
         return sorted(self._scan_soft_skills(self.preprocess_text(text)))
 
     def extract_categorised_skills(self, text: str) -> dict[str, list[str]]:
-        """Return skills found, grouped by category (Feature 5)."""
+        """Return skills found, grouped by category."""
         cleaned = self.preprocess_text(text)
         cats: dict[str, list[str]] = {cat: [] for cat in SKILL_CATEGORIES}
         for skill in self._scan_skills(cleaned):
@@ -227,6 +242,9 @@ class NLPProcessor:
             cats[cat] = sorted(set(cats[cat]))
         return cats
 
+    # ------------------------------------------------------------------
+    # Resume section detection
+    # ------------------------------------------------------------------
     def detect_resume_sections(self, text: str) -> dict[str, bool]:
         """Detect which standard sections are present in the resume."""
         text_lower = text.lower()
@@ -262,7 +280,7 @@ class NLPProcessor:
         }
 
     # ------------------------------------------------------------------
-    # Impact-statement detection (Feature 8 helper)
+    # Metric / impact detection (Feature 6)
     # ------------------------------------------------------------------
     def count_impact_statements(self, text: str) -> int:
         """Count sentences with quantified metrics."""
@@ -270,6 +288,7 @@ class NLPProcessor:
             r"\b\d+\s*%",
             r"\$\s*\d+",
             r"\b\d+x\b",
+            r"\b\d+k\b",
             r"increased|decreased|reduced|improved|saved|generated|grew|boosted",
         ]
         count = 0

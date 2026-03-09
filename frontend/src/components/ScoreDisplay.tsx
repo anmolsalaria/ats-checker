@@ -7,25 +7,45 @@ interface ScoreDisplayProps {
   label: string;
   score: number;
   size?: "sm" | "md" | "lg";
+  grade?: string;
 }
 
 function getScoreColor(score: number): string {
-  if (score >= 75) return "#16a34a"; // green-600
-  if (score >= 50) return "#f59e0b"; // amber-500
+  if (score >= 80) return "#16a34a"; // green-600
+  if (score >= 60) return "#f59e0b"; // amber-500
+  if (score >= 40) return "#f97316"; // orange-500
   return "#ef4444"; // red-500
 }
 
 function getScoreLabel(score: number): string {
-  if (score >= 80) return "Excellent";
-  if (score >= 60) return "Good";
-  if (score >= 40) return "Fair";
-  return "Needs Work";
+  if (score >= 90) return "Excellent";
+  if (score >= 80) return "Very Good";
+  if (score >= 70) return "Good";
+  if (score >= 60) return "Fair";
+  if (score >= 40) return "Needs Work";
+  return "Poor";
+}
+
+function getGradeColor(grade: string): string {
+  switch (grade) {
+    case "A":
+      return "#16a34a";
+    case "B":
+      return "#22c55e";
+    case "C":
+      return "#f59e0b";
+    case "D":
+      return "#f97316";
+    default:
+      return "#ef4444";
+  }
 }
 
 export default function ScoreDisplay({
   label,
   score,
   size = "md",
+  grade,
 }: ScoreDisplayProps) {
   const color = getScoreColor(score);
   const dimensions = {
@@ -36,7 +56,7 @@ export default function ScoreDisplay({
 
   return (
     <div className="card flex flex-col items-center justify-center py-8">
-      <div className={dimensions[size]}>
+      <div className={`relative ${dimensions[size]}`}>
         <CircularProgressbar
           value={score}
           text={`${score}%`}
@@ -48,6 +68,15 @@ export default function ScoreDisplay({
             pathTransitionDuration: 1,
           })}
         />
+        {/* ATS Grade badge (Feature 9) */}
+        {grade && size === "lg" && (
+          <div
+            className="absolute -right-2 -top-2 flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white shadow-lg"
+            style={{ backgroundColor: getGradeColor(grade) }}
+          >
+            {grade}
+          </div>
+        )}
       </div>
       <p className="mt-3 text-sm font-medium text-gray-600">{label}</p>
       {size === "lg" && (

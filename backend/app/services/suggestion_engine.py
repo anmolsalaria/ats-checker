@@ -1,11 +1,15 @@
-"""Suggestion generation service — v2 (Feature 8).
+"""Advanced suggestion engine (Feature 12).
 
-Produces higher-quality, more actionable suggestions:
-- Quantified-achievement guidance
-- Category-aware missing-tech hints
-- Resume-section recommendations
-- Score-tier adaptive advice
+Produces high-quality, actionable suggestions based on:
+- Skill-gap per category
+- Missing keywords
+- Resume sections
+- Score tiers
+- Bullet-point analysis
+- Impact statement count
 """
+
+from __future__ import annotations
 
 import logging
 
@@ -13,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class SuggestionEngine:
-    """Generates actionable improvement suggestions based on analysis results."""
+    """Generates actionable improvement suggestions."""
 
     CATEGORY_ADVICE: dict[str, str] = {
         "languages": (
@@ -21,33 +25,32 @@ class SuggestionEngine:
             "List them explicitly in a Skills section."
         ),
         "frameworks": (
-            "Include frameworks mentioned in the job description — "
-            "for example React, Django, Spring, or Node.js."
+            "Include frameworks mentioned in the job description "
+            "(e.g., React, Django, Spring, Node.js)."
         ),
         "databases": (
             "Highlight database experience. Mention specific databases "
-            "(PostgreSQL, MongoDB, Redis) and any query-optimisation work."
+            "(PostgreSQL, MongoDB, Redis) and query-optimisation work."
         ),
         "cloud": (
             "Add cloud platform experience (AWS, Azure, GCP). "
-            "Mention specific services you have used, such as S3, EC2, Lambda, "
-            "or Cloud Functions."
+            "Mention specific services like S3, EC2, Lambda, or Cloud Functions."
         ),
         "devops": (
             "Include DevOps and CI/CD experience. Mention Docker, Kubernetes, "
             "Jenkins, GitHub Actions, Terraform, or similar tools."
         ),
         "tools": (
-            "List developer tools you use daily — Git, Postman, VS Code, "
-            "Linux, etc. These are easy wins for ATS keyword matching."
+            "List developer tools you use daily (Git, Postman, VS Code, Linux). "
+            "These are easy wins for ATS keyword matching."
         ),
-        "data_and_ml": (
-            "Mention data and ML tools relevant to the role — "
-            "pandas, TensorFlow, scikit-learn, Spark, or Tableau."
+        "data_ml": (
+            "Mention data and ML tools relevant to the role "
+            "(pandas, TensorFlow, scikit-learn, Spark, Tableau)."
         ),
         "concepts": (
-            "Reference software-engineering concepts from the JD — "
-            "REST APIs, microservices, system design, Agile, or TDD."
+            "Reference software-engineering concepts from the JD "
+            "(REST APIs, microservices, system design, Agile, TDD)."
         ),
     }
 
@@ -58,6 +61,8 @@ class SuggestionEngine:
         ats_score: int,
         skill_gap: dict | None = None,
         impact_count: int = 0,
+        bullet_quality_score: int = 100,
+        detected_role: str = "Software Engineer",
     ) -> list[str]:
         suggestions: list[str] = []
 
@@ -85,7 +90,8 @@ class SuggestionEngine:
         if not resume_sections.get("summary"):
             suggestions.append(
                 "Add a Professional Summary at the top of your resume. "
-                "This helps recruiters and ATS parsers quickly identify your profile."
+                "This helps recruiters and ATS parsers quickly identify "
+                "your profile."
             )
 
         if not resume_sections.get("skills"):
@@ -110,45 +116,57 @@ class SuggestionEngine:
         # ---- 4. Quantified-achievement guidance ----
         if impact_count < 2:
             suggestions.append(
-                'Add quantified achievements — for example, '
-                '"Improved API response time by 40%" or '
-                '"Reduced deployment time from 2 hours to 15 minutes". '
+                'Add quantified achievements (e.g., '
+                '"Improved API response time by 40%", '
+                '"Reduced deployment time from 2 hours to 15 minutes"). '
                 "Metrics make your resume more compelling to both ATS and humans."
             )
 
-        # ---- 5. Score-tier advice ----
+        # ---- 5. Bullet quality suggestions ----
+        if bullet_quality_score < 40:
+            suggestions.append(
+                "Improve your bullet points: start each with a strong action verb "
+                "(Built, Developed, Optimized), mention the specific technology, "
+                "and include a quantified result."
+            )
+        elif bullet_quality_score < 60:
+            suggestions.append(
+                "Some bullet points lack impact. Ensure each one follows the "
+                "pattern: [Action Verb] + [Technology] + [Quantified Result]."
+            )
+
+        # ---- 6. Score-tier advice ----
         if ats_score < 40:
             suggestions.append(
                 "Your resume has low alignment with this job description. "
-                "Consider tailoring it specifically for this role — "
-                "mirror the language and keywords from the job posting."
+                "Consider tailoring it specifically for this role by "
+                "mirroring the language and keywords from the job posting."
             )
         elif ats_score < 60:
             suggestions.append(
                 "Your resume partially matches the job description. "
-                "Focus on the missing keywords and try to add them "
+                "Focus on incorporating the missing keywords "
                 "in context within your experience bullets."
             )
         elif ats_score < 80:
             suggestions.append(
-                "Good alignment — fine-tune by incorporating a few more "
+                "Good alignment. Fine-tune by incorporating a few more "
                 "missing keywords and strengthening quantified achievements."
             )
 
-        # ---- 6. Cloud / DevOps nudge ----
-        if skill_gap:
-            cloud_missing = skill_gap.get("cloud", {}).get("missing_skills", [])
-            devops_missing = skill_gap.get("devops", {}).get("missing_skills", [])
-            if cloud_missing and "cloud" not in [s[:5] for s in suggestions]:
-                suggestions.append(
-                    "Cloud skills are increasingly expected. "
-                    f"Consider adding: {', '.join(cloud_missing[:3])}."
-                )
-            if devops_missing and "devops" not in [s[:6] for s in suggestions]:
-                suggestions.append(
-                    "DevOps experience is highly valued. "
-                    f"Consider learning: {', '.join(devops_missing[:3])}."
-                )
+        # ---- 7. Role-specific advice ----
+        if "Machine Learning" in detected_role or "Data" in detected_role:
+            suggestions.append(
+                f"Targeting '{detected_role}': emphasize ML/data projects, "
+                "model metrics (accuracy, F1), and tools (TensorFlow, PyTorch, "
+                "pandas, SQL)."
+            )
+        elif "DevOps" in detected_role or "Cloud" in detected_role:
+            suggestions.append(
+                f"Targeting '{detected_role}': highlight infrastructure "
+                "projects, uptime improvements, CI/CD pipelines, and "
+                "cloud cost optimisations."
+            )
 
         # Deduplicate (preserve order)
         seen: set[str] = set()
@@ -166,8 +184,9 @@ class SuggestionEngine:
         weaknesses: list[str],
         resume_sections: dict[str, bool],
         impact_count: int = 0,
+        bullet_quality_score: int = 100,
     ) -> list[str]:
-        """Suggestions for the no-JD resume-strength mode (Feature 6)."""
+        """Suggestions for the no-JD resume-strength mode (Feature 8)."""
         suggestions: list[str] = []
 
         for w in weaknesses:
@@ -175,9 +194,15 @@ class SuggestionEngine:
 
         if impact_count < 2:
             suggestions.append(
-                'Add measurable achievements — e.g., '
-                '"Reduced infrastructure costs by 30%" or '
-                '"Served 10K daily active users".'
+                'Add measurable achievements (e.g., '
+                '"Reduced infrastructure costs by 30%", '
+                '"Served 10K daily active users").'
+            )
+
+        if bullet_quality_score < 50:
+            suggestions.append(
+                "Strengthen your bullet points: use strong action verbs, "
+                "mention technologies, and add quantified results."
             )
 
         if not resume_sections.get("summary"):

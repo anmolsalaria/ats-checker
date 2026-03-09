@@ -7,6 +7,7 @@ import { AnalysisResult, ResumeStrengthResult } from "@/types";
 import ScoreDisplay from "@/components/ScoreDisplay";
 import KeywordList from "@/components/KeywordList";
 import Suggestions from "@/components/Suggestions";
+import BulletAnalysis from "@/components/BulletAnalysis";
 import {
   ArrowLeft,
   BarChart3,
@@ -16,6 +17,8 @@ import {
   Layers,
   TrendingUp,
   TrendingDown,
+  Briefcase,
+  ListChecks,
 } from "lucide-react";
 
 /* ---------- shared fade-in helper ---------- */
@@ -34,31 +37,98 @@ const fadeUp = {
 function ATSResults({ result }: { result: AnalysisResult }) {
   const sectionEntries = Object.entries(result.resume_sections);
   const skillGapEntries = Object.entries(result.skill_gap || {}).filter(
-    ([, v]) => v.required > 0 || v.matched > 0,
+    ([, v]) => v.required > 0 || v.matched > 0
   );
 
   return (
     <>
-      {/* Score overview */}
+      {/* Detected Role & Grade (Feature 7 & 9) */}
       <motion.div
         variants={fadeUp}
         initial="hidden"
         animate="visible"
         custom={0}
-        className="mb-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4"
+        className="mb-6 flex flex-wrap items-center gap-4"
       >
-        <ScoreDisplay label="Overall ATS Score" score={result.ats_score} size="lg" />
-        <ScoreDisplay label="Keyword Match" score={result.keyword_match_score} size="md" />
-        <ScoreDisplay label="Semantic Similarity" score={result.semantic_similarity_score} size="md" />
-        <ScoreDisplay label="Skill Coverage" score={result.skill_coverage_score} size="md" />
+        <div className="flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-4 py-2">
+          <Briefcase className="h-5 w-5 text-primary-600" />
+          <span className="text-sm font-medium text-primary-700">
+            Detected Role: {result.detected_role}
+          </span>
+        </div>
+        <div
+          className={`flex items-center gap-2 rounded-lg border px-4 py-2 ${
+            result.ats_grade === "A" || result.ats_grade === "B"
+              ? "border-green-200 bg-green-50"
+              : result.ats_grade === "C"
+              ? "border-amber-200 bg-amber-50"
+              : "border-red-200 bg-red-50"
+          }`}
+        >
+          <span
+            className={`text-lg font-bold ${
+              result.ats_grade === "A" || result.ats_grade === "B"
+                ? "text-green-700"
+                : result.ats_grade === "C"
+                ? "text-amber-700"
+                : "text-red-700"
+            }`}
+          >
+            Grade: {result.ats_grade}
+          </span>
+        </div>
+      </motion.div>
+
+      {/* Score overview */}
+      <motion.div
+        variants={fadeUp}
+        initial="hidden"
+        animate="visible"
+        custom={1}
+        className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-5"
+      >
+        <ScoreDisplay
+          label="Overall ATS Score"
+          score={result.ats_score}
+          size="lg"
+          grade={result.ats_grade}
+        />
+        <ScoreDisplay
+          label="Keyword Match"
+          score={result.keyword_match_score}
+          size="md"
+        />
+        <ScoreDisplay
+          label="Semantic Similarity"
+          score={result.semantic_similarity_score}
+          size="md"
+        />
+        <ScoreDisplay
+          label="Skill Coverage"
+          score={result.skill_coverage_score}
+          size="md"
+        />
+        <ScoreDisplay
+          label="Bullet Quality"
+          score={result.bullet_quality_score}
+          size="md"
+        />
       </motion.div>
 
       {/* Keywords */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <motion.div variants={fadeUp} initial="hidden" animate="visible" custom={1} className="card">
+        <motion.div
+          variants={fadeUp}
+          initial="hidden"
+          animate="visible"
+          custom={2}
+          className="card"
+        >
           <div className="mb-4 flex items-center gap-2">
             <CheckCircle2 className="h-5 w-5 text-green-600" />
-            <h3 className="text-lg font-semibold text-gray-900">Matched Keywords</h3>
+            <h3 className="text-lg font-semibold text-gray-900">
+              Matched Keywords
+            </h3>
             <span className="ml-auto rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
               {result.matched_keywords.length}
             </span>
@@ -66,10 +136,18 @@ function ATSResults({ result }: { result: AnalysisResult }) {
           <KeywordList keywords={result.matched_keywords} variant="matched" />
         </motion.div>
 
-        <motion.div variants={fadeUp} initial="hidden" animate="visible" custom={2} className="card">
+        <motion.div
+          variants={fadeUp}
+          initial="hidden"
+          animate="visible"
+          custom={3}
+          className="card"
+        >
           <div className="mb-4 flex items-center gap-2">
             <XCircle className="h-5 w-5 text-red-500" />
-            <h3 className="text-lg font-semibold text-gray-900">Missing Keywords</h3>
+            <h3 className="text-lg font-semibold text-gray-900">
+              Missing Keywords
+            </h3>
             <span className="ml-auto rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">
               {result.missing_keywords.length}
             </span>
@@ -78,19 +156,52 @@ function ATSResults({ result }: { result: AnalysisResult }) {
         </motion.div>
       </div>
 
-      {/* Categorised skill gap (Feature 5) */}
+      {/* Bullet Point Analysis (Feature 4) */}
+      {result.bullet_analysis && result.bullet_analysis.length > 0 && (
+        <motion.div
+          variants={fadeUp}
+          initial="hidden"
+          animate="visible"
+          custom={4}
+          className="mt-6 card"
+        >
+          <div className="mb-4 flex items-center gap-2">
+            <ListChecks className="h-5 w-5 text-primary-600" />
+            <h3 className="text-lg font-semibold text-gray-900">
+              Bullet Point Analysis
+            </h3>
+            <span className="ml-auto rounded-full bg-primary-100 px-2.5 py-0.5 text-xs font-medium text-primary-700">
+              {result.bullet_quality_score}% quality
+            </span>
+          </div>
+          <BulletAnalysis bullets={result.bullet_analysis} />
+        </motion.div>
+      )}
+
+      {/* Categorised skill gap */}
       {skillGapEntries.length > 0 && (
-        <motion.div variants={fadeUp} initial="hidden" animate="visible" custom={3} className="mt-6 card">
+        <motion.div
+          variants={fadeUp}
+          initial="hidden"
+          animate="visible"
+          custom={5}
+          className="mt-6 card"
+        >
           <div className="mb-4 flex items-center gap-2">
             <BarChart3 className="h-5 w-5 text-primary-600" />
-            <h3 className="text-lg font-semibold text-gray-900">Skill Gap by Category</h3>
+            <h3 className="text-lg font-semibold text-gray-900">
+              Skill Gap by Category
+            </h3>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {skillGapEntries.map(([cat, info]) => {
               const total = info.matched + (info.missing_skills?.length || 0);
               const pct = total > 0 ? (info.matched / total) * 100 : 0;
               return (
-                <div key={cat} className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+                <div
+                  key={cat}
+                  className="rounded-lg border border-gray-100 bg-gray-50 p-4"
+                >
                   <h4 className="mb-2 text-sm font-semibold capitalize text-gray-700">
                     {cat.replace(/_/g, " ")}
                   </h4>
@@ -122,10 +233,18 @@ function ATSResults({ result }: { result: AnalysisResult }) {
       )}
 
       {/* Resume sections */}
-      <motion.div variants={fadeUp} initial="hidden" animate="visible" custom={4} className="mt-6 card">
+      <motion.div
+        variants={fadeUp}
+        initial="hidden"
+        animate="visible"
+        custom={6}
+        className="mt-6 card"
+      >
         <div className="mb-4 flex items-center gap-2">
           <Layers className="h-5 w-5 text-primary-600" />
-          <h3 className="text-lg font-semibold text-gray-900">Resume Sections</h3>
+          <h3 className="text-lg font-semibold text-gray-900">
+            Resume Sections
+          </h3>
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {sectionEntries.map(([section, detected]) => (
@@ -137,7 +256,11 @@ function ATSResults({ result }: { result: AnalysisResult }) {
                   : "border-gray-200 bg-gray-50 text-gray-400"
               }`}
             >
-              {detected ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+              {detected ? (
+                <CheckCircle2 className="h-4 w-4" />
+              ) : (
+                <XCircle className="h-4 w-4" />
+              )}
               <span className="capitalize">{section}</span>
             </div>
           ))}
@@ -145,7 +268,13 @@ function ATSResults({ result }: { result: AnalysisResult }) {
       </motion.div>
 
       {/* Suggestions */}
-      <motion.div variants={fadeUp} initial="hidden" animate="visible" custom={5} className="mt-6 card">
+      <motion.div
+        variants={fadeUp}
+        initial="hidden"
+        animate="visible"
+        custom={7}
+        className="mt-6 card"
+      >
         <div className="mb-4 flex items-center gap-2">
           <Lightbulb className="h-5 w-5 text-amber-500" />
           <h3 className="text-lg font-semibold text-gray-900">Suggestions</h3>
@@ -157,7 +286,7 @@ function ATSResults({ result }: { result: AnalysisResult }) {
 }
 
 /* ========================================================================== */
-/*  Resume Strength Results (no JD — Feature 6)                               */
+/*  Resume Strength Results (no JD -- Feature 8)                              */
 /* ========================================================================== */
 function StrengthResults({ result }: { result: ResumeStrengthResult }) {
   const sectionEntries = Object.entries(result.resume_sections);
@@ -170,63 +299,139 @@ function StrengthResults({ result }: { result: ResumeStrengthResult }) {
         initial="hidden"
         animate="visible"
         custom={0}
-        className="mb-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4"
+        className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-5"
       >
-        <ScoreDisplay label="Resume Strength" score={result.resume_strength_score} size="lg" />
-        <ScoreDisplay label="Tech Coverage" score={result.tech_coverage_score} size="md" />
-        <ScoreDisplay label="Structure" score={result.structure_score} size="md" />
-        <ScoreDisplay label="Impact Statements" score={result.impact_score} size="md" />
+        <ScoreDisplay
+          label="Resume Strength"
+          score={result.resume_strength_score}
+          size="lg"
+        />
+        <ScoreDisplay
+          label="Tech Coverage"
+          score={result.tech_coverage_score}
+          size="md"
+        />
+        <ScoreDisplay
+          label="Structure"
+          score={result.structure_score}
+          size="md"
+        />
+        <ScoreDisplay
+          label="Impact Statements"
+          score={result.impact_score}
+          size="md"
+        />
+        <ScoreDisplay
+          label="Bullet Quality"
+          score={result.bullet_quality_score}
+          size="md"
+        />
       </motion.div>
 
       {/* Strengths & Weaknesses */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <motion.div variants={fadeUp} initial="hidden" animate="visible" custom={1} className="card">
+        <motion.div
+          variants={fadeUp}
+          initial="hidden"
+          animate="visible"
+          custom={1}
+          className="card"
+        >
           <div className="mb-4 flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-green-600" />
             <h3 className="text-lg font-semibold text-gray-900">Strengths</h3>
           </div>
           <ul className="space-y-2">
             {result.strengths.map((s, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+              <li
+                key={i}
+                className="flex items-start gap-2 text-sm text-gray-700"
+              >
                 <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-green-500" />
                 {s}
               </li>
             ))}
             {result.strengths.length === 0 && (
-              <li className="text-sm text-gray-400">No notable strengths detected.</li>
+              <li className="text-sm text-gray-400">
+                No notable strengths detected.
+              </li>
             )}
           </ul>
         </motion.div>
 
-        <motion.div variants={fadeUp} initial="hidden" animate="visible" custom={2} className="card">
+        <motion.div
+          variants={fadeUp}
+          initial="hidden"
+          animate="visible"
+          custom={2}
+          className="card"
+        >
           <div className="mb-4 flex items-center gap-2">
             <TrendingDown className="h-5 w-5 text-red-500" />
             <h3 className="text-lg font-semibold text-gray-900">Weaknesses</h3>
           </div>
           <ul className="space-y-2">
             {result.weaknesses.map((w, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+              <li
+                key={i}
+                className="flex items-start gap-2 text-sm text-gray-700"
+              >
                 <XCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-400" />
                 {w}
               </li>
             ))}
             {result.weaknesses.length === 0 && (
-              <li className="text-sm text-gray-400">No weaknesses found — great job!</li>
+              <li className="text-sm text-gray-400">
+                No weaknesses found -- great job!
+              </li>
             )}
           </ul>
         </motion.div>
       </div>
 
+      {/* Bullet Analysis (Feature 4) */}
+      {result.bullet_analysis && result.bullet_analysis.length > 0 && (
+        <motion.div
+          variants={fadeUp}
+          initial="hidden"
+          animate="visible"
+          custom={3}
+          className="mt-6 card"
+        >
+          <div className="mb-4 flex items-center gap-2">
+            <ListChecks className="h-5 w-5 text-primary-600" />
+            <h3 className="text-lg font-semibold text-gray-900">
+              Bullet Point Analysis
+            </h3>
+            <span className="ml-auto rounded-full bg-primary-100 px-2.5 py-0.5 text-xs font-medium text-primary-700">
+              {result.bullet_quality_score}% quality
+            </span>
+          </div>
+          <BulletAnalysis bullets={result.bullet_analysis} />
+        </motion.div>
+      )}
+
       {/* Detected skills by category */}
       {Object.keys(result.categorised_skills).length > 0 && (
-        <motion.div variants={fadeUp} initial="hidden" animate="visible" custom={3} className="mt-6 card">
+        <motion.div
+          variants={fadeUp}
+          initial="hidden"
+          animate="visible"
+          custom={4}
+          className="mt-6 card"
+        >
           <div className="mb-4 flex items-center gap-2">
             <BarChart3 className="h-5 w-5 text-primary-600" />
-            <h3 className="text-lg font-semibold text-gray-900">Skills Detected</h3>
+            <h3 className="text-lg font-semibold text-gray-900">
+              Skills Detected
+            </h3>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {Object.entries(result.categorised_skills).map(([cat, skills]) => (
-              <div key={cat} className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+              <div
+                key={cat}
+                className="rounded-lg border border-gray-100 bg-gray-50 p-4"
+              >
                 <h4 className="mb-2 text-sm font-semibold capitalize text-gray-700">
                   {cat.replace(/_/g, " ")}
                 </h4>
@@ -247,10 +452,18 @@ function StrengthResults({ result }: { result: ResumeStrengthResult }) {
       )}
 
       {/* Resume sections */}
-      <motion.div variants={fadeUp} initial="hidden" animate="visible" custom={4} className="mt-6 card">
+      <motion.div
+        variants={fadeUp}
+        initial="hidden"
+        animate="visible"
+        custom={5}
+        className="mt-6 card"
+      >
         <div className="mb-4 flex items-center gap-2">
           <Layers className="h-5 w-5 text-primary-600" />
-          <h3 className="text-lg font-semibold text-gray-900">Resume Sections</h3>
+          <h3 className="text-lg font-semibold text-gray-900">
+            Resume Sections
+          </h3>
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {sectionEntries.map(([section, detected]) => (
@@ -262,7 +475,11 @@ function StrengthResults({ result }: { result: ResumeStrengthResult }) {
                   : "border-gray-200 bg-gray-50 text-gray-400"
               }`}
             >
-              {detected ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+              {detected ? (
+                <CheckCircle2 className="h-4 w-4" />
+              ) : (
+                <XCircle className="h-4 w-4" />
+              )}
               <span className="capitalize">{section}</span>
             </div>
           ))}
@@ -270,7 +487,13 @@ function StrengthResults({ result }: { result: ResumeStrengthResult }) {
       </motion.div>
 
       {/* Suggestions */}
-      <motion.div variants={fadeUp} initial="hidden" animate="visible" custom={5} className="mt-6 card">
+      <motion.div
+        variants={fadeUp}
+        initial="hidden"
+        animate="visible"
+        custom={6}
+        className="mt-6 card"
+      >
         <div className="mb-4 flex items-center gap-2">
           <Lightbulb className="h-5 w-5 text-amber-500" />
           <h3 className="text-lg font-semibold text-gray-900">Suggestions</h3>
@@ -286,8 +509,11 @@ function StrengthResults({ result }: { result: ResumeStrengthResult }) {
 /* ========================================================================== */
 export default function ResultsPage() {
   const router = useRouter();
-  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
-  const [strengthResult, setStrengthResult] = useState<ResumeStrengthResult | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(
+    null
+  );
+  const [strengthResult, setStrengthResult] =
+    useState<ResumeStrengthResult | null>(null);
 
   useEffect(() => {
     const a = sessionStorage.getItem("analysisResult");
@@ -311,7 +537,10 @@ export default function ResultsPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
-      <button onClick={() => router.push("/")} className="btn-secondary mb-8 gap-2">
+      <button
+        onClick={() => router.push("/")}
+        className="btn-secondary mb-8 gap-2"
+      >
         <ArrowLeft className="h-4 w-4" />
         Analyze Another Resume
       </button>

@@ -1,4 +1,4 @@
-/** API client for the ATS Resume Analyzer backend — v2. */
+/** API client for the ATS Resume Analyzer backend -- v3. */
 
 import { AnalysisResult, ResumeStrengthResult } from "@/types";
 
@@ -15,7 +15,9 @@ export class ApiError extends Error {
 
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
-    const err = await response.json().catch(() => ({ detail: "Request failed" }));
+    const err = await response
+      .json()
+      .catch(() => ({ detail: "Request failed" }));
     throw new ApiError(err.detail || "An error occurred", response.status);
   }
   return response.json();
@@ -24,7 +26,7 @@ async function handleResponse<T>(response: Response): Promise<T> {
 /** Analyse a resume file against a job description. */
 export async function analyzeResume(
   file: File,
-  jobDescription: string,
+  jobDescription: string
 ): Promise<AnalysisResult> {
   const form = new FormData();
   form.append("resume", file);
@@ -36,19 +38,22 @@ export async function analyzeResume(
 /** Analyse resume text (no file upload). */
 export async function analyzeResumeText(
   resumeText: string,
-  jobDescription: string,
+  jobDescription: string
 ): Promise<AnalysisResult> {
   const res = await fetch(`${API_URL}/analyze-text`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ resume_text: resumeText, job_description: jobDescription }),
+    body: JSON.stringify({
+      resume_text: resumeText,
+      job_description: jobDescription,
+    }),
   });
   return handleResponse<AnalysisResult>(res);
 }
 
-/** Analyse resume without a JD (Feature 6). */
+/** Analyse resume without a JD (Feature 8). */
 export async function analyzeResumeOnly(
-  resumeText: string,
+  resumeText: string
 ): Promise<ResumeStrengthResult> {
   const res = await fetch(`${API_URL}/analyze-resume-only`, {
     method: "POST",
@@ -58,13 +63,28 @@ export async function analyzeResumeOnly(
   return handleResponse<ResumeStrengthResult>(res);
 }
 
-/** Analyse a resume file without a JD (Feature 6 — file variant). */
+/** Analyse a resume file without a JD (Feature 8 -- file variant). */
 export async function analyzeResumeFileOnly(
-  file: File,
+  file: File
 ): Promise<ResumeStrengthResult> {
-  // Read the file as text on the client (simple approach for now)
   const text = await file.text();
   return analyzeResumeOnly(text);
+}
+
+/** Analyse via LinkedIn URL import (Feature 10). */
+export async function analyzeLinkedIn(
+  linkedinUrl: string,
+  resumeText: string
+): Promise<AnalysisResult> {
+  const res = await fetch(`${API_URL}/analyze-linkedin`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      linkedin_url: linkedinUrl,
+      resume_text: resumeText,
+    }),
+  });
+  return handleResponse<AnalysisResult>(res);
 }
 
 /** Health check. */
