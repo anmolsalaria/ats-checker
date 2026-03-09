@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: ats-resume-analyzer-api
+    env: python
+    buildCommand: "pip install -r requirements.txt && python -m spacy download en_core_web_sm && python -m nltk.downloader punkt stopwords averaged_perceptron_tagger wordnet punkt_tab averaged_perceptron_tagger_eng"
+    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: ALLOWED_ORIGINS
+        value: "https://your-frontend.vercel.app"
