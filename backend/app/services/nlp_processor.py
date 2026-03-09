@@ -1,4 +1,13 @@
-"""NLP processing service for keyword extraction and text analysis."""
+"""NLP processing service — rewritten for accurate keyword extraction.
+
+Changes from v1:
+- Aggressive filtering: drops dates, numbers, generic nouns, short tokens
+- Uses curated skill dictionary for detection
+- Normalised, deduplicated, lowercase output
+- spaCy noun-chunk extraction with strict quality filter
+- TF-IDF only retains high-value terms
+- Caches the spaCy model for performance (F9)
+"""
 
 import logging
 import re
@@ -11,10 +20,19 @@ from nltk.tokenize import word_tokenize
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 from app.config import settings
+from app.services.skill_database import (
+    get_all_skills,
+    get_skill_category,
+    SOFT_SKILLS,
+    GENERIC_STOPWORDS,
+    SKILL_CATEGORIES,
+)
 
 logger = logging.getLogger(__name__)
 
-# Ensure NLTK data is available
+# ---------------------------------------------------------------------------
+# NLTK bootstrap
+# ---------------------------------------------------------------------------
 _NLTK_PACKAGES = [
     ("tokenizers", "punkt_tab"),
     ("tokenizers", "punkt"),
@@ -29,38 +47,27 @@ for _category, _package in _NLTK_PACKAGES:
     except (LookupError, OSError):
         nltk.download(_package, quiet=True)
 
-
-# Common technical skills and keywords for better extraction
-TECHNICAL_SKILLS = {
-    "python", "java", "javascript", "typescript", "c++", "c#", "ruby", "go",
-    "rust", "swift", "kotlin", "php", "scala", "r", "matlab", "sql", "nosql",
-    "react", "angular", "vue", "next.js", "node.js", "express", "django",
-    "flask", "fastapi", "spring", "rails", ".net", "laravel",
-    "aws", "azure", "gcp", "docker", "kubernetes", "terraform", "ansible",
-    "jenkins", "ci/cd", "github actions", "gitlab ci",
-    "postgresql", "mysql", "mongodb", "redis", "elasticsearch", "dynamodb",
-    "cassandra", "sqlite", "oracle",
-    "machine learning", "deep learning", "nlp", "computer vision",
-    "tensorflow", "pytorch", "scikit-learn", "pandas", "numpy",
-    "rest", "graphql", "grpc", "microservices", "api",
-    "git", "linux", "agile", "scrum", "jira", "confluence",
-    "html", "css", "sass", "tailwind", "bootstrap",
-    "figma", "sketch", "adobe xd",
-    "data structures", "algorithms", "system design",
-    "unit testing", "integration testing", "tdd", "bdd",
-    "oauth", "jwt", "ssl", "encryption", "cybersecurity",
-    "hadoop", "spark", "kafka", "airflow", "etl",
-    "tableau", "power bi", "looker",
-    "ios", "android", "react native", "flutter",
-}
-
-SOFT_SKILLS = {
-    "leadership", "communication", "teamwork", "problem solving",
-    "critical thinking", "time management", "adaptability", "creativity",
-    "collaboration", "mentoring", "presentation", "negotiation",
-    "project management", "stakeholder management", "strategic planning",
-    "decision making", "conflict resolution", "analytical",
-}
+# ---------------------------------------------------------------------------
+# Precompiled patterns
+# ---------------------------------------------------------------------------
+_DATE_RE = re.compile(
+    r"\b\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{2,4}\b"
+    r"|\b\d{1,2}(?:st|nd|rd|th)?\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*"
+    r"|\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+\d{1,4}"
+    r"|\b\d{4}\s*[-\u2013]\s*(?:\d{4}|present|current)",
+    re.IGNORECASE,
+)
+_NUMBER_PHRASE_RE = re.compile(
+    r"\b\d+[\d,\.]*\s*(?:million|billion|thousand|hundred|percent|%|dollars?"
+    r"|months?|years?|weeks?|days?|hours?|minutes?|gb|mb|kb|tb)\b",
+    re.IGNORECASE,
+)
+_PURE_NUMBER_RE = re.compile(r"^\d[\d,\.%\+\-]*$")
+_URL_RE = re.compile(r"https?://\S+|www\.\S+")
+_EMAIL_RE = re.compile(r"\S+@\S+")
+_PHONE_RE = re.compile(r"\b\d{3}[-.]?\d{3}[-.]?\d{4}\b")
+_SPECIAL_CHAR_RE = re.compile(r"[^\w\s\-./+#]")
+_MULTI_SPACE_RE = re.compile(r"\s+")
 
 
 @lru_cache(maxsize=1)
@@ -69,7 +76,7 @@ def _load_spacy_model():
     try:
         return spacy.load(settings.SPACY_MODEL)
     except OSError:
-        logger.warning(f"spaCy model '{settings.SPACY_MODEL}' not found. Downloading...")
+        logger.warning(f"Downloading spaCy model '{settings.SPACY_MODEL}'...")
         spacy.cli.download(settings.SPACY_MODEL)
         return spacy.load(settings.SPACY_MODEL)
 
@@ -80,106 +87,149 @@ class NLPProcessor:
     def __init__(self):
         self.nlp = _load_spacy_model()
         self.stop_words = set(stopwords.words("english"))
+        self.all_skills = get_all_skills()
         self.tfidf = TfidfVectorizer(
             max_features=200,
             stop_words="english",
             ngram_range=(1, 3),
         )
 
+    # ------------------------------------------------------------------
+    # Text cleaning
+    # ------------------------------------------------------------------
     def preprocess_text(self, text: str) -> str:
-        """Clean and normalize text."""
-        # Convert to lowercase
+        """Clean and normalise text."""
         text = text.lower()
-        # Remove URLs
-        text = re.sub(r"https?://\S+|www\.\S+", "", text)
-        # Remove email addresses
-        text = re.sub(r"\S+@\S+", "", text)
-        # Remove phone numbers
-        text = re.sub(r"\b\d{3}[-.]?\d{3}[-.]?\d{4}\b", "", text)
-        # Remove special characters but keep hyphens, periods, slashes, plus and hash
-        text = re.sub(r"[^\w\s\-./+#]", " ", text)
-        # Normalize whitespace
-        text = re.sub(r"\s+", " ", text).strip()
+        text = _URL_RE.sub("", text)
+        text = _EMAIL_RE.sub("", text)
+        text = _PHONE_RE.sub("", text)
+        text = _DATE_RE.sub("", text)
+        text = _NUMBER_PHRASE_RE.sub("", text)
+        text = _SPECIAL_CHAR_RE.sub(" ", text)
+        text = _MULTI_SPACE_RE.sub(" ", text).strip()
         return text
 
-    def extract_keywords(self, text: str) -> list[str]:
-        """Extract meaningful keywords from text using spaCy and TF-IDF.
+    # ------------------------------------------------------------------
+    # Token-level quality gate
+    # ------------------------------------------------------------------
+    def _is_valid_keyword(self, token: str) -> bool:
+        """Return True only for meaningful, non-generic tokens."""
+        t = token.strip().lower()
+        if len(t) < 2:
+            return False
+        if _PURE_NUMBER_RE.match(t):
+            return False
+        if t in self.stop_words:
+            return False
+        if t in GENERIC_STOPWORDS:
+            return False
+        if all(c.isdigit() or c in ".,%+-/" for c in t):
+            return False
+        return True
 
-        Combines named entity recognition, noun phrase extraction,
-        and TF-IDF scoring for comprehensive keyword extraction.
+    # ------------------------------------------------------------------
+    # Core keyword extraction (Feature 1 rewrite)
+    # ------------------------------------------------------------------
+    def extract_keywords(self, text: str) -> list[str]:
+        """Extract meaningful, deduplicated keywords.
+
+        Pipeline:
+        1. Dictionary skill scan (highest priority)
+        2. spaCy noun-chunk extraction (filtered)
+        3. TF-IDF top-term extraction (filtered)
+        All outputs pass through _is_valid_keyword.
         """
-        cleaned_text = self.preprocess_text(text)
+        cleaned = self.preprocess_text(text)
         keywords: set[str] = set()
 
-        # 1. Extract using spaCy NER and noun chunks
-        doc = self.nlp(cleaned_text)
+        # 1. Dictionary skills
+        keywords.update(self._scan_skills(cleaned))
 
-        for ent in doc.ents:
-            if ent.label_ in ("ORG", "PRODUCT", "GPE", "SKILL", "WORK_OF_ART"):
-                keywords.add(ent.text.strip())
+        # 2. Soft skills
+        keywords.update(self._scan_soft_skills(cleaned))
 
+        # 3. spaCy noun chunks (filtered)
+        doc = self.nlp(cleaned)
         for chunk in doc.noun_chunks:
-            chunk_text = chunk.text.strip()
-            # Filter out very short or very long chunks
-            if 2 <= len(chunk_text) <= 50:
-                keywords.add(chunk_text)
+            ct = chunk.text.strip()
+            words_in_chunk = ct.split()
+            if 1 <= len(words_in_chunk) <= 3 and self._is_valid_keyword(ct):
+                if not all(w in GENERIC_STOPWORDS or w in self.stop_words for w in words_in_chunk):
+                    keywords.add(ct)
 
-        # 2. Extract known technical & soft skills
-        text_lower = cleaned_text.lower()
-        for skill in TECHNICAL_SKILLS | SOFT_SKILLS:
-            if skill in text_lower:
-                keywords.add(skill)
-
-        # 3. Extract using TF-IDF on individual tokens
-        tokens = word_tokenize(cleaned_text)
-        meaningful_tokens = [
-            t for t in tokens
-            if t not in self.stop_words
-            and len(t) > 2
-            and not t.isdigit()
-        ]
-
-        if meaningful_tokens:
+        # 4. TF-IDF top terms (filtered)
+        tokens = word_tokenize(cleaned)
+        meaningful = [t for t in tokens if self._is_valid_keyword(t)]
+        if meaningful:
             try:
-                tfidf_matrix = self.tfidf.fit_transform([" ".join(meaningful_tokens)])
-                feature_names = self.tfidf.get_feature_names_out()
-                scores = tfidf_matrix.toarray()[0]
-
-                # Get top keywords by TF-IDF score
-                top_indices = scores.argsort()[-30:][::-1]
-                for idx in top_indices:
+                mat = self.tfidf.fit_transform([" ".join(meaningful)])
+                names = self.tfidf.get_feature_names_out()
+                scores = mat.toarray()[0]
+                top_idx = scores.argsort()[-20:][::-1]
+                for idx in top_idx:
                     if scores[idx] > 0:
-                        keywords.add(feature_names[idx])
+                        term = names[idx]
+                        if self._is_valid_keyword(term):
+                            keywords.add(term)
             except Exception as e:
                 logger.warning(f"TF-IDF extraction failed: {e}")
 
-        # Clean and deduplicate
-        cleaned_keywords = set()
+        # Final clean pass
+        cleaned_kws: set[str] = set()
         for kw in keywords:
             kw_clean = kw.strip().lower()
-            if len(kw_clean) > 1 and kw_clean not in self.stop_words:
-                cleaned_keywords.add(kw_clean)
+            if self._is_valid_keyword(kw_clean):
+                cleaned_kws.add(kw_clean)
 
-        return sorted(cleaned_keywords)
+        return sorted(cleaned_kws)
 
+    # ------------------------------------------------------------------
+    # Dictionary-based skill scanning
+    # ------------------------------------------------------------------
+    def _scan_skills(self, text_lower: str) -> set[str]:
+        """Scan text for known technical skills from the curated DB."""
+        found: set[str] = set()
+        for skill in self.all_skills:
+            if len(skill) <= 2:
+                if re.search(rf"\b{re.escape(skill)}\b", text_lower):
+                    found.add(skill)
+            elif skill in text_lower:
+                found.add(skill)
+        return found
+
+    def _scan_soft_skills(self, text_lower: str) -> set[str]:
+        found: set[str] = set()
+        for skill in SOFT_SKILLS:
+            if skill in text_lower:
+                found.add(skill)
+        return found
+
+    # ------------------------------------------------------------------
+    # Convenience wrappers
+    # ------------------------------------------------------------------
     def extract_technical_skills(self, text: str) -> list[str]:
-        """Extract only technical skills from text."""
-        text_lower = text.lower()
-        return sorted(
-            skill for skill in TECHNICAL_SKILLS if skill in text_lower
-        )
+        """Extract only known technical skills."""
+        return sorted(self._scan_skills(self.preprocess_text(text)))
 
     def extract_soft_skills(self, text: str) -> list[str]:
-        """Extract only soft skills from text."""
-        text_lower = text.lower()
-        return sorted(
-            skill for skill in SOFT_SKILLS if skill in text_lower
-        )
+        """Extract only soft skills."""
+        return sorted(self._scan_soft_skills(self.preprocess_text(text)))
+
+    def extract_categorised_skills(self, text: str) -> dict[str, list[str]]:
+        """Return skills found, grouped by category (Feature 5)."""
+        cleaned = self.preprocess_text(text)
+        cats: dict[str, list[str]] = {cat: [] for cat in SKILL_CATEGORIES}
+        for skill in self._scan_skills(cleaned):
+            cat = get_skill_category(skill)
+            if cat and cat in cats:
+                cats[cat].append(skill)
+        for cat in cats:
+            cats[cat] = sorted(set(cats[cat]))
+        return cats
 
     def detect_resume_sections(self, text: str) -> dict[str, bool]:
         """Detect which standard sections are present in the resume."""
         text_lower = text.lower()
-
         section_patterns = {
             "experience": [
                 "experience", "work history", "employment",
@@ -206,8 +256,24 @@ class NLPProcessor:
                 "professional summary", "career objective",
             ],
         }
-
         return {
-            section: any(pattern in text_lower for pattern in patterns)
+            section: any(p in text_lower for p in patterns)
             for section, patterns in section_patterns.items()
         }
+
+    # ------------------------------------------------------------------
+    # Impact-statement detection (Feature 8 helper)
+    # ------------------------------------------------------------------
+    def count_impact_statements(self, text: str) -> int:
+        """Count sentences with quantified metrics."""
+        patterns = [
+            r"\b\d+\s*%",
+            r"\$\s*\d+",
+            r"\b\d+x\b",
+            r"increased|decreased|reduced|improved|saved|generated|grew|boosted",
+        ]
+        count = 0
+        for sent in text.split("."):
+            if any(re.search(p, sent, re.IGNORECASE) for p in patterns):
+                count += 1
+        return count

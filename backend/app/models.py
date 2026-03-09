@@ -1,35 +1,39 @@
-"""Pydantic models for request/response schemas."""
+"""Pydantic models for request/response schemas — v2."""
+
+from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
 
+# ---------------------------------------------------------------------------
+# Requests
+# ---------------------------------------------------------------------------
+
 class AnalysisRequest(BaseModel):
-    """Request model for text-based analysis."""
-
+    """Request model for text-based analysis (with JD)."""
     resume_text: str = Field(..., min_length=50, description="Resume text content")
-    job_description: str = Field(
-        ..., min_length=50, description="Job description text"
-    )
+    job_description: str = Field(..., min_length=50, description="Job description text")
 
 
-class SkillGap(BaseModel):
-    """Skill gap breakdown."""
-
-    matched: int
-    missing: int
-    keywords: list[str] = []
+class ResumeOnlyRequest(BaseModel):
+    """Request model for no-JD resume strength analysis (Feature 6)."""
+    resume_text: str = Field(..., min_length=50, description="Resume text content")
 
 
-class SkillGapAnalysis(BaseModel):
-    """Skill gap analysis result."""
+# ---------------------------------------------------------------------------
+# Shared sub-models
+# ---------------------------------------------------------------------------
 
-    technical: SkillGap
-    soft_skills: SkillGap
+class CategorySkillGap(BaseModel):
+    """Per-category skill gap info (Feature 5)."""
+    matched: int = 0
+    required: int = 0
+    matched_skills: list[str] = []
+    missing_skills: list[str] = []
 
 
 class ResumeSections(BaseModel):
     """Detected resume sections."""
-
     experience: bool = False
     education: bool = False
     skills: bool = False
@@ -38,35 +42,40 @@ class ResumeSections(BaseModel):
     summary: bool = False
 
 
-class AnalysisResponse(BaseModel):
-    """Response model for resume analysis."""
+# ---------------------------------------------------------------------------
+# Responses
+# ---------------------------------------------------------------------------
 
-    ats_score: int = Field(..., ge=0, le=100, description="Overall ATS score (0-100)")
-    keyword_match_score: int = Field(
-        ..., ge=0, le=100, description="Keyword match percentage"
-    )
-    semantic_similarity_score: int = Field(
-        ..., ge=0, le=100, description="Semantic similarity percentage"
-    )
-    matched_keywords: list[str] = Field(
-        default_factory=list, description="Keywords found in resume"
-    )
-    missing_keywords: list[str] = Field(
-        default_factory=list, description="Keywords missing from resume"
-    )
-    suggestions: list[str] = Field(
-        default_factory=list, description="Improvement suggestions"
-    )
-    resume_sections: ResumeSections = Field(
-        default_factory=ResumeSections, description="Detected resume sections"
-    )
-    skill_gap_analysis: SkillGapAnalysis | None = Field(
-        None, description="Skill gap breakdown"
-    )
+class AnalysisResponse(BaseModel):
+    """Response model for resume + JD analysis."""
+    ats_score: int = Field(..., ge=0, le=100, description="Overall ATS score")
+    keyword_match_score: int = Field(..., ge=0, le=100)
+    semantic_similarity_score: int = Field(..., ge=0, le=100)
+    skill_coverage_score: int = Field(0, ge=0, le=100)
+    structure_score: int = Field(0, ge=0, le=100)
+    matched_keywords: list[str] = Field(default_factory=list)
+    missing_keywords: list[str] = Field(default_factory=list)
+    suggestions: list[str] = Field(default_factory=list)
+    resume_sections: ResumeSections = Field(default_factory=ResumeSections)
+    skill_gap: dict[str, CategorySkillGap] = Field(default_factory=dict)
+
+
+class ResumeStrengthResponse(BaseModel):
+    """Response model for no-JD resume strength analysis (Feature 6)."""
+    resume_strength_score: int = Field(..., ge=0, le=100)
+    tech_coverage_score: int = Field(0, ge=0, le=100)
+    structure_score: int = Field(0, ge=0, le=100)
+    impact_score: int = Field(0, ge=0, le=100)
+    matched_skills: list[str] = Field(default_factory=list)
+    missing_skills: list[str] = Field(default_factory=list)
+    categorised_skills: dict[str, list[str]] = Field(default_factory=dict)
+    resume_sections: ResumeSections = Field(default_factory=ResumeSections)
+    strengths: list[str] = Field(default_factory=list)
+    weaknesses: list[str] = Field(default_factory=list)
+    suggestions: list[str] = Field(default_factory=list)
 
 
 class HealthResponse(BaseModel):
     """Health check response."""
-
     status: str = "healthy"
     version: str

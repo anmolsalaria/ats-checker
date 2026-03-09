@@ -1,14 +1,10 @@
-/** API response and request types. */
+/** API response and request types — v2. */
 
-export interface SkillGap {
+export interface CategorySkillGap {
   matched: number;
-  missing: number;
-  keywords: string[];
-}
-
-export interface SkillGapAnalysis {
-  technical: SkillGap;
-  soft_skills: SkillGap;
+  required: number;
+  matched_skills: string[];
+  missing_skills: string[];
 }
 
 export interface ResumeSections {
@@ -20,15 +16,33 @@ export interface ResumeSections {
   summary: boolean;
 }
 
+/** Response from /analyze and /analyze-text */
 export interface AnalysisResult {
   ats_score: number;
   keyword_match_score: number;
   semantic_similarity_score: number;
+  skill_coverage_score: number;
+  structure_score: number;
   matched_keywords: string[];
   missing_keywords: string[];
   suggestions: string[];
   resume_sections: ResumeSections;
-  skill_gap_analysis: SkillGapAnalysis | null;
+  skill_gap: Record<string, CategorySkillGap>;
+}
+
+/** Response from /analyze-resume-only (Feature 6) */
+export interface ResumeStrengthResult {
+  resume_strength_score: number;
+  tech_coverage_score: number;
+  structure_score: number;
+  impact_score: number;
+  matched_skills: string[];
+  missing_skills: string[];
+  categorised_skills: Record<string, string[]>;
+  resume_sections: ResumeSections;
+  strengths: string[];
+  weaknesses: string[];
+  suggestions: string[];
 }
 
 export interface HealthStatus {
