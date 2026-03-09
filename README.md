@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🔍 AI ATS Resume Analyzer
+# AI ATS Resume Analyzer
 
 **Optimize your resume for Applicant Tracking Systems with AI-powered NLP analysis.**
 
@@ -18,7 +18,7 @@
 
 ---
 
-## 📋 About
+## About
 
 AI ATS Resume Analyzer is a full-stack application that helps job seekers maximize their chances of passing Applicant Tracking Systems. Upload your resume, paste a job description, and get instant AI-powered feedback.
 
@@ -31,13 +31,13 @@ AI ATS Resume Analyzer is a full-stack application that helps job seekers maximi
 
 ---
 
-## ✨ Features
+## Features
 
 <table>
 <tr>
 <td width="50%">
 
-### 🌐 Web Application
+### Web Application
 - Drag-and-drop resume upload (PDF & DOCX)
 - Job description text input
 - ATS compatibility score (0–100%)
@@ -52,7 +52,7 @@ AI ATS Resume Analyzer is a full-stack application that helps job seekers maximi
 </td>
 <td width="50%">
 
-### 🧩 Chrome Extension
+### Chrome Extension
 - Detects job descriptions on **LinkedIn**, **Indeed**, **Glassdoor**, **Monster**
 - One-click job description extraction
 - Sends data to backend API
@@ -63,7 +63,7 @@ AI ATS Resume Analyzer is a full-stack application that helps job seekers maximi
 </tr>
 </table>
 
-### 🧠 NLP Pipeline
+### NLP Pipeline
 - **spaCy** — Named Entity Recognition and noun chunk extraction
 - **NLTK** — Tokenization and text preprocessing
 - **scikit-learn** — TF-IDF vectorization for keyword extraction
@@ -71,7 +71,7 @@ AI ATS Resume Analyzer is a full-stack application that helps job seekers maximi
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Layer | Technologies |
 |:------|:------------|
@@ -84,7 +84,7 @@ AI ATS Resume Analyzer is a full-stack application that helps job seekers maximi
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 ┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
@@ -106,7 +106,7 @@ AI ATS Resume Analyzer is a full-stack application that helps job seekers maximi
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 
 ```
 ATS_Checker/
@@ -172,7 +172,7 @@ ATS_Checker/
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -250,7 +250,7 @@ npm run dev
 
 ---
 
-## 📡 API Reference
+## API Reference
 
 ### `POST /analyze` — Analyze resume file
 
@@ -304,7 +304,7 @@ Returns `{ "status": "healthy", "version": "1.0.0" }`
 
 ---
 
-## 📊 Scoring Algorithm
+## Scoring Algorithm
 
 The ATS score is calculated using a weighted combination of two metrics:
 
@@ -331,7 +331,7 @@ ATS Score: 78%
 
 ---
 
-## 📸 Screenshots
+## Screenshots
 
 > *Add screenshots after running the application.*
 
@@ -345,7 +345,7 @@ ATS Score: 78%
 
 ---
 
-## 🚢 Deployment
+## Deployment
 
 ### Frontend → Vercel
 
@@ -371,7 +371,7 @@ ATS Score: 78%
 
 ---
 
-## 🧪 Running Tests
+## Running Tests
 
 ```bash
 cd backend
@@ -390,7 +390,7 @@ tests/test_analyzer.py::test_analyze_unsupported_file   PASSED
 
 ---
 
-## 🗺️ Roadmap
+## Roadmap
 
 - [ ] Multi-language resume support
 - [ ] Resume template generator
