@@ -17,7 +17,7 @@ Features:
 """
 
 import logging
-from contextlib import asynccontextmanager
+import threading
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -39,26 +39,39 @@ from app.utils.helpers import setup_logging, truncate_text
 
 logger = logging.getLogger(__name__)
 
-# Pre-load heavy models at startup
+# ---------------------------------------------------------------------------
+# Lazy scorer singleton — models load on first request, NOT at startup
+# ---------------------------------------------------------------------------
+_scorer: ATSScorer | None = None
+_scorer_lock = threading.Lock()
+
+
+def get_scorer() -> ATSScorer:
+    """Return the shared ATSScorer, creating it on first call.
+
+    ATSScorer.__init__ is now lightweight (no model loading).
+    Heavy models load lazily inside the scorer on first analysis.
+    """
+    global _scorer
+    if _scorer is not None:
+        return _scorer
+    with _scorer_lock:
+        if _scorer is not None:
+            return _scorer
+        setup_logging(settings.DEBUG)
+        logger.info("Creating ATSScorer instance (models will load on first use) …")
+        _scorer = ATSScorer()
+        return _scorer
+
+
+# For backward compat with tests that set `main_module.scorer`
 scorer: ATSScorer | None = None
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    global scorer
-    setup_logging(settings.DEBUG)
-    logger.info("Loading NLP models...")
-    scorer = ATSScorer()
-    logger.info("Models loaded successfully.")
-    yield
-    logger.info("Shutting down.")
 
 
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     description="Analyze your resume against job descriptions for ATS compatibility.",
-    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -75,11 +88,8 @@ app.add_middleware(
 def _build_analysis_response(results: dict) -> AnalysisResponse:
     """Map scorer output to the Pydantic response model."""
     resume_text = results.get("_resume_text", "")
-    impact_count = (
-        scorer.keyword_extractor.count_impact_statements(resume_text)
-        if scorer
-        else 0
-    )
+    s = get_scorer()
+    impact_count = s.keyword_extractor.count_impact_statements(resume_text)
 
     suggestions = SuggestionEngine.generate_suggestions(
         missing_keywords=results["missing_keywords"],
@@ -114,6 +124,11 @@ def _build_analysis_response(results: dict) -> AnalysisResponse:
 # ---------- Endpoints ---------- #
 
 
+@app.get("/", tags=["System"])
+async def root():
+    return {"status": "ok", "app": settings.APP_NAME, "version": settings.APP_VERSION}
+
+
 @app.get("/health", response_model=HealthResponse, tags=["System"])
 async def health_check():
     return HealthResponse(status="healthy", version=settings.APP_VERSION)
@@ -125,9 +140,7 @@ async def analyze_resume(
     job_description: str = Form(..., description="Job description text"),
 ):
     """Analyse an uploaded resume against a job description."""
-    global scorer
-    if scorer is None:
-        raise HTTPException(status_code=503, detail="Service is still loading models.")
+    s = get_scorer()
 
     if resume.content_type not in ResumeParser.SUPPORTED_TYPES:
         raise HTTPException(
@@ -154,7 +167,7 @@ async def analyze_resume(
         resume_text = truncate_text(resume_text)
         job_description = truncate_text(job_description)
 
-        results = scorer.calculate_ats_score(resume_text, job_description)
+        results = s.calculate_ats_score(resume_text, job_description)
         results["_resume_text"] = resume_text
         return _build_analysis_response(results)
 
@@ -168,15 +181,13 @@ async def analyze_resume(
 @app.post("/analyze-text", response_model=AnalysisResponse, tags=["Analysis"])
 async def analyze_resume_text(request: AnalysisRequest):
     """Analyse resume text directly (no file upload)."""
-    global scorer
-    if scorer is None:
-        raise HTTPException(status_code=503, detail="Service is still loading models.")
+    s = get_scorer()
 
     try:
         resume_text = truncate_text(request.resume_text)
         jd = truncate_text(request.job_description)
 
-        results = scorer.calculate_ats_score(resume_text, jd)
+        results = s.calculate_ats_score(resume_text, jd)
         results["_resume_text"] = resume_text
         return _build_analysis_response(results)
 
@@ -192,15 +203,13 @@ async def analyze_resume_text(request: AnalysisRequest):
 )
 async def analyze_resume_only(request: ResumeOnlyRequest):
     """Analyse a resume without a job description (Feature 8)."""
-    global scorer
-    if scorer is None:
-        raise HTTPException(status_code=503, detail="Service is still loading models.")
+    s = get_scorer()
 
     try:
         resume_text = truncate_text(request.resume_text)
-        results = scorer.calculate_resume_strength(resume_text)
+        results = s.calculate_resume_strength(resume_text)
 
-        impact_count = scorer.keyword_extractor.count_impact_statements(resume_text)
+        impact_count = s.keyword_extractor.count_impact_statements(resume_text)
         suggestions = SuggestionEngine.generate_strength_suggestions(
             weaknesses=results["weaknesses"],
             resume_sections=results["resume_sections"],
@@ -238,16 +247,14 @@ async def analyze_resume_only(request: ResumeOnlyRequest):
 )
 async def analyze_linkedin(request: LinkedInImportRequest):
     """Import a JD from a LinkedIn URL and analyse (Feature 10)."""
-    global scorer
-    if scorer is None:
-        raise HTTPException(status_code=503, detail="Service is still loading models.")
+    s = get_scorer()
 
     try:
         job_description = ResumeParser.extract_from_linkedin_url(request.linkedin_url)
         resume_text = truncate_text(request.resume_text)
         job_description = truncate_text(job_description)
 
-        results = scorer.calculate_ats_score(resume_text, job_description)
+        results = s.calculate_ats_score(resume_text, job_description)
         results["_resume_text"] = resume_text
         return _build_analysis_response(results)
 

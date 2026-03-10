@@ -16,13 +16,12 @@ Also provides:
 from __future__ import annotations
 
 import logging
-from functools import lru_cache
 
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
-from sentence_transformers import SentenceTransformer
 
 from app.config import settings
+from app.services.model_loader import get_sentence_model
 from app.services.keyword_extractor import KeywordExtractor
 from app.services.skill_matcher import SkillMatcher
 from app.services.bullet_analyzer import BulletAnalyzer
@@ -41,15 +40,7 @@ logger = logging.getLogger(__name__)
 _embedding_cache: dict[int, np.ndarray] = {}
 
 
-@lru_cache(maxsize=1)
-def _load_sentence_model():
-    logger.info(
-        f"Loading sentence-transformers model: {settings.SENTENCE_TRANSFORMER_MODEL}"
-    )
-    return SentenceTransformer(settings.SENTENCE_TRANSFORMER_MODEL)
-
-
-def _get_embedding(model: SentenceTransformer, text: str) -> np.ndarray:
+def _get_embedding(model, text: str) -> np.ndarray:
     key = hash(text)
     if key not in _embedding_cache:
         _embedding_cache[key] = model.encode(
@@ -99,7 +90,14 @@ class ATSScorer:
         self.skill_matcher = SkillMatcher(self.keyword_extractor)
         self.bullet_analyzer = BulletAnalyzer()
         self.role_detector = RoleDetector()
-        self.model = _load_sentence_model()
+        self._model = None  # loaded lazily on first analysis
+
+    @property
+    def model(self):
+        """Lazy-load sentence-transformers model on first use."""
+        if self._model is None:
+            self._model = get_sentence_model()
+        return self._model
 
     # ------------------------------------------------------------------
     # Semantic similarity

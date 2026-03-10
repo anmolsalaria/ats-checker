@@ -27,7 +27,10 @@ def _load_models():
     from app.services.ats_scorer import ATSScorer
     import app.main as main_module
 
-    main_module.scorer = ATSScorer()
+    # Create scorer and register it with both the new lazy loader and legacy global
+    s = ATSScorer()
+    main_module._scorer = s
+    main_module.scorer = s
     yield
 
 

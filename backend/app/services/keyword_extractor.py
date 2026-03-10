@@ -14,15 +14,10 @@ from __future__ import annotations
 
 import logging
 import re
-from functools import lru_cache
 
-import spacy
-import nltk
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from app.config import settings
+from app.services.model_loader import ensure_nltk, get_spacy_model
 from app.services.skill_database import (
     get_all_skills,
     get_skill_category,
@@ -32,23 +27,6 @@ from app.services.skill_database import (
 )
 
 logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# NLTK bootstrap
-# ---------------------------------------------------------------------------
-_NLTK_PACKAGES = [
-    ("tokenizers", "punkt_tab"),
-    ("tokenizers", "punkt"),
-    ("corpora", "stopwords"),
-    ("taggers", "averaged_perceptron_tagger_eng"),
-    ("corpora", "wordnet"),
-]
-
-for _category, _package in _NLTK_PACKAGES:
-    try:
-        nltk.data.find(f"{_category}/{_package}")
-    except (LookupError, OSError):
-        nltk.download(_package, quiet=True)
 
 # ---------------------------------------------------------------------------
 # Precompiled patterns
@@ -73,29 +51,34 @@ _SPECIAL_CHAR_RE = re.compile(r"[^\w\s\-./+#]")
 _MULTI_SPACE_RE = re.compile(r"\s+")
 
 
-@lru_cache(maxsize=1)
-def _load_spacy_model():
-    """Load and cache the spaCy model."""
-    try:
-        return spacy.load(settings.SPACY_MODEL)
-    except OSError:
-        logger.warning(f"Downloading spaCy model '{settings.SPACY_MODEL}'...")
-        spacy.cli.download(settings.SPACY_MODEL)
-        return spacy.load(settings.SPACY_MODEL)
-
-
 class KeywordExtractor:
     """Extracts meaningful, deduplicated keywords with strict filtering."""
 
     def __init__(self):
-        self.nlp = _load_spacy_model()
-        self.stop_words = set(stopwords.words("english"))
+        self._nlp = None
+        self._stop_words: set[str] | None = None
         self.all_skills = get_all_skills()
         self.tfidf = TfidfVectorizer(
             max_features=200,
             stop_words="english",
             ngram_range=(1, 2),
         )
+
+    # -- lazy properties ---------------------------------------------------
+
+    @property
+    def nlp(self):
+        if self._nlp is None:
+            self._nlp = get_spacy_model()
+        return self._nlp
+
+    @property
+    def stop_words(self) -> set[str]:
+        if self._stop_words is None:
+            ensure_nltk()
+            from nltk.corpus import stopwords as _sw
+            self._stop_words = set(_sw.words("english"))
+        return self._stop_words
 
     # ------------------------------------------------------------------
     # Text cleaning
@@ -173,6 +156,8 @@ class KeywordExtractor:
                     keywords.add(ct)
 
         # 4. TF-IDF top terms (filtered)
+        ensure_nltk()
+        from nltk.tokenize import word_tokenize
         tokens = word_tokenize(cleaned)
         meaningful = [t for t in tokens if self._is_valid_keyword(t)]
         if meaningful:
