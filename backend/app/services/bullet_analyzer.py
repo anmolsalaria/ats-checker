@@ -74,12 +74,20 @@ class BulletAnalysis:
 
 
 class BulletAnalyzer:
-    """Analyses resume bullet points for quality (Feature 4)."""
+    """Analyses resume bullet points for quality (Feature 4).
 
-    # Scoring weights within a bullet
-    ACTION_WEIGHT = 0.30
-    TECH_WEIGHT = 0.40
+    Scoring weights (professional ATS model):
+      Action verb       -> 20 points
+      Technology mention -> 20 points
+      Quantified metrics -> 30 points
+      Clear structure    -> 30 points
+    """
+
+    # Scoring weights within a bullet (sum to 1.0)
+    ACTION_WEIGHT = 0.20
+    TECH_WEIGHT = 0.20
     METRIC_WEIGHT = 0.30
+    STRUCTURE_WEIGHT = 0.30
 
     def __init__(self):
         self._all_skills = get_all_skills()
@@ -165,6 +173,20 @@ class BulletAnalyzer:
             found_metrics.extend(matches)
         has_metric = len(found_metrics) > 0
 
+        # --- Structure / clarity score ---
+        word_count = len(bullet.split())
+        # Ideal bullet: 10-25 words, starts with verb, no filler
+        structure_score = 0
+        if 8 <= word_count <= 30:
+            structure_score += 50  # good length
+        elif 5 <= word_count <= 35:
+            structure_score += 25  # acceptable length
+        if has_strong:
+            structure_score += 30  # starts with action verb
+        if not is_weak:
+            structure_score += 20  # no weak verb
+        structure_score = min(structure_score, 100)
+
         # --- Score ---
         action_score = 100 if has_strong else (30 if not is_weak else 0)
         tech_score = 100 if has_tech else 0
@@ -174,6 +196,7 @@ class BulletAnalyzer:
             self.ACTION_WEIGHT * action_score
             + self.TECH_WEIGHT * tech_score
             + self.METRIC_WEIGHT * metric_score
+            + self.STRUCTURE_WEIGHT * structure_score
         )
 
         # --- Suggestion ---

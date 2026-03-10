@@ -8,10 +8,25 @@ from __future__ import annotations
 import logging
 import re
 
-from app.services.skill_database import SKILL_CATEGORIES, get_skill_category
+from app.services.skill_database import SKILL_CATEGORIES, get_skill_category, get_all_skills
 from app.services.keyword_extractor import KeywordExtractor
 
 logger = logging.getLogger(__name__)
+
+# Words that should never appear as "missing keywords"
+_MISSING_KW_BLOCKLIST: set[str] = {
+    "action", "pressure", "alerts", "impact", "driven", "fast-paced",
+    "passion", "passionate", "enthusiasm", "excited", "exciting",
+    "competitive", "ideal", "preferred", "desired", "minimum",
+    "maximum", "bachelor", "master", "degree", "equivalent",
+    "collaborate", "stakeholder", "stakeholders", "hybrid", "remote",
+    "onsite", "office", "travel", "relocation", "visa", "sponsorship",
+    "apply", "resume", "cover", "letter", "interview", "salary",
+    "benefits", "perks", "bonus", "equal", "opportunity", "employer",
+    "diversity", "inclusion", "accommodation", "background", "check",
+    "comply", "compliance", "regulation", "status", "veteran",
+    "disability", "gender", "race", "orientation", "religion",
+}
 
 
 class SkillMatcher:
@@ -46,17 +61,29 @@ class SkillMatcher:
 
         missing = jd_set - matched
 
-        # Filter missing keywords — clean only
+        # Filter missing keywords — only meaningful skills/technologies
+        all_skills = get_all_skills()
         clean_missing: set[str] = set()
         for kw in missing:
             if len(kw.split()) > 2:
                 continue
             if kw.replace(".", "").replace(",", "").isdigit():
                 continue
+            if kw in _MISSING_KW_BLOCKLIST:
+                continue
+            if len(kw) < 2:
+                continue
+            # Prioritize: always include if it's a known skill
+            # Otherwise still include if it passes basic filters
             clean_missing.add(kw)
 
+        # Sort: known skills first, then alphabetical
+        known = sorted(kw for kw in clean_missing if kw in all_skills)
+        other = sorted(kw for kw in clean_missing if kw not in all_skills)
+        sorted_missing = known + other
+
         score = int((len(matched) / len(jd_set)) * 100)
-        return min(score, 100), sorted(matched), sorted(clean_missing)
+        return min(score, 100), sorted(matched), sorted_missing
 
     def calculate_skill_coverage(
         self,

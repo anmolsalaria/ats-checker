@@ -29,6 +29,54 @@ from app.services.skill_database import (
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
+# Keyword normalization / alias mapping
+# ---------------------------------------------------------------------------
+_KEYWORD_ALIASES: dict[str, str] = {
+    "artificial intelligence": "ai",
+    "machine learning": "machine learning",
+    "ml": "machine learning",
+    "dl": "deep learning",
+    "nlp": "nlp",
+    "natural language processing": "nlp",
+    "js": "javascript",
+    "ts": "typescript",
+    "py": "python",
+    "k8s": "kubernetes",
+    "postgres": "postgresql",
+    "react.js": "react",
+    "reactjs": "react",
+    "node.js": "node.js",
+    "nodejs": "node.js",
+    "vue.js": "vue",
+    "vuejs": "vue",
+    "next.js": "next.js",
+    "nextjs": "next.js",
+    "ci/cd": "ci/cd",
+    "cicd": "ci/cd",
+    "amazon web services": "aws",
+    "google cloud platform": "gcp",
+    "google cloud": "gcp",
+}
+
+# Extra words that should never appear as "missing keywords"
+_MISSING_KEYWORD_BLOCKLIST: set[str] = {
+    "action", "pressure", "alerts", "impact", "driven", "fast-paced",
+    "passion", "passionate", "enthusiasm", "excited", "exciting",
+    "competitive", "salary", "benefits", "perks", "bonus",
+    "equal", "opportunity", "employer", "diversity", "inclusion",
+    "reasonable", "accommodation", "background", "check",
+    "comply", "compliance", "regulation", "regulations",
+    "status", "veteran", "disability", "gender", "race",
+    "orientation", "religion", "national", "origin",
+    "apply", "resume", "cover", "letter", "interview",
+    "hybrid", "remote", "onsite", "office", "location",
+    "travel", "relocation", "visa", "sponsorship",
+    "ideal", "preferred", "desired", "minimum", "maximum",
+    "bachelor", "master", "degree", "equivalent",
+    "collaborate", "collaborate", "stakeholder", "stakeholders",
+}
+
+# ---------------------------------------------------------------------------
 # Precompiled patterns
 # ---------------------------------------------------------------------------
 _DATE_RE = re.compile(
@@ -96,6 +144,15 @@ class KeywordExtractor:
         return text
 
     # ------------------------------------------------------------------
+    # Keyword normalization
+    # ------------------------------------------------------------------
+    @staticmethod
+    def normalize_keyword(kw: str) -> str:
+        """Normalize a keyword using alias mapping."""
+        kw_lower = kw.strip().lower()
+        return _KEYWORD_ALIASES.get(kw_lower, kw_lower)
+
+    # ------------------------------------------------------------------
     # Token-level quality gate
     # ------------------------------------------------------------------
     def _is_valid_keyword(self, token: str) -> bool:
@@ -108,6 +165,8 @@ class KeywordExtractor:
         if t in self.stop_words:
             return False
         if t in GENERIC_STOPWORDS:
+            return False
+        if t in _MISSING_KEYWORD_BLOCKLIST:
             return False
         if all(c.isdigit() or c in ".,%+-/" for c in t):
             return False
@@ -174,10 +233,10 @@ class KeywordExtractor:
             except Exception as e:
                 logger.warning(f"TF-IDF extraction failed: {e}")
 
-        # Final clean pass
+        # Final clean pass — normalize and validate
         cleaned_kws: set[str] = set()
         for kw in keywords:
-            kw_clean = kw.strip().lower()
+            kw_clean = self.normalize_keyword(kw)
             if self._is_valid_keyword(kw_clean):
                 cleaned_kws.add(kw_clean)
 
@@ -228,40 +287,52 @@ class KeywordExtractor:
         return cats
 
     # ------------------------------------------------------------------
-    # Resume section detection
+    # Resume section detection (improved with regex heading detection)
     # ------------------------------------------------------------------
+    _SECTION_PATTERNS: dict[str, re.Pattern] = {
+        "experience": re.compile(
+            r"(?:^|\n)\s*(?:professional\s+)?(?:work\s+)?(?:experience|employment|work\s+history)"
+            r"\s*[:\-\—]?\s*(?:\n|$)",
+            re.IGNORECASE,
+        ),
+        "education": re.compile(
+            r"(?:^|\n)\s*(?:education|academic\s+background|academic|qualifications)"
+            r"\s*[:\-\—]?\s*(?:\n|$)"
+            r"|(?:bachelor|master|ph\.?d|b\.?s\.?|m\.?s\.?|b\.?tech|m\.?tech|mba|diploma)\b",
+            re.IGNORECASE,
+        ),
+        "skills": re.compile(
+            r"(?:^|\n)\s*(?:(?:technical\s+|core\s+|key\s+)?skills|competencies|"
+            r"technologies|proficiencies|tech\s+stack)\s*[:\-\—]?\s*(?:\n|$)",
+            re.IGNORECASE,
+        ),
+        "projects": re.compile(
+            r"(?:^|\n)\s*(?:(?:personal\s+|key\s+|selected\s+|academic\s+)?projects|portfolio)"
+            r"\s*[:\-\—]?\s*(?:\n|$)",
+            re.IGNORECASE,
+        ),
+        "certifications": re.compile(
+            r"(?:^|\n)\s*(?:certifications?|certificates?|licenses?|accreditations?|credentials?)"
+            r"\s*[:\-\—]?\s*(?:\n|$)",
+            re.IGNORECASE,
+        ),
+        "summary": re.compile(
+            r"(?:^|\n)\s*(?:(?:professional\s+|executive\s+|career\s+)?summary|"
+            r"(?:career\s+)?objective|profile|about\s+me)\s*[:\-\—]?\s*(?:\n|$)",
+            re.IGNORECASE,
+        ),
+    }
+
     def detect_resume_sections(self, text: str) -> dict[str, bool]:
-        """Detect which standard sections are present in the resume."""
-        text_lower = text.lower()
-        section_patterns = {
-            "experience": [
-                "experience", "work history", "employment",
-                "professional experience", "work experience",
-            ],
-            "education": [
-                "education", "academic", "university", "degree",
-                "bachelor", "master", "phd", "diploma",
-            ],
-            "skills": [
-                "skills", "technical skills", "competencies",
-                "technologies", "tools", "proficiencies",
-            ],
-            "projects": [
-                "projects", "personal projects", "portfolio",
-                "key projects", "selected projects",
-            ],
-            "certifications": [
-                "certifications", "certificates", "licensed",
-                "accreditations", "credentials",
-            ],
-            "summary": [
-                "summary", "objective", "profile", "about me",
-                "professional summary", "career objective",
-            ],
-        }
+        """Detect which standard sections are present using regex heading patterns.
+
+        Uses case-insensitive regex that looks for section headers at the
+        beginning of lines, optionally followed by colons or dashes.
+        This is more reliable than simple substring matching.
+        """
         return {
-            section: any(p in text_lower for p in patterns)
-            for section, patterns in section_patterns.items()
+            section: bool(pattern.search(text))
+            for section, pattern in self._SECTION_PATTERNS.items()
         }
 
     # ------------------------------------------------------------------

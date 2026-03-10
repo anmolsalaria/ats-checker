@@ -169,13 +169,15 @@ class ATSScorer:
         # Role detection (Feature 7)
         detected_role = self.role_detector.detect_role(job_description)
 
-        # Weighted combination (Feature 3)
+        # Weighted combination (Feature 3 — 4-component professional model)
+        # Structure score is blended into skill_coverage for the final weight
+        blended_skill_score = int(0.75 * skill_coverage_score + 0.25 * structure_score)
+
         final = int(
             settings.KEYWORD_WEIGHT * keyword_score
             + settings.SEMANTIC_WEIGHT * semantic_score
-            + settings.SKILL_COVERAGE_WEIGHT * skill_coverage_score
+            + settings.SKILL_COVERAGE_WEIGHT * blended_skill_score
             + settings.BULLET_QUALITY_WEIGHT * bullet_quality_score
-            + settings.STRUCTURE_WEIGHT * structure_score
         )
         final = max(0, min(100, final))
 

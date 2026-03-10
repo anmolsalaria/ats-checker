@@ -1,12 +1,26 @@
-"""File parsing service for PDF and DOCX resume files."""
+"""File parsing service for PDF and DOCX resume files.
+
+Uses pymupdf (fitz) for PDF extraction — produces clean readable text
+without PDF metadata artifacts like << /Filter /FlateDecode >>.
+"""
 
 import io
 import logging
+import re
 
-from PyPDF2 import PdfReader
+import fitz  # pymupdf
 from docx import Document
 
 logger = logging.getLogger(__name__)
+
+# Patterns that indicate raw PDF metadata leaked into text
+_PDF_METADATA_RE = re.compile(
+    r"<<\s*/[A-Z].*?>>|"           # << /Filter /FlateDecode >>
+    r"\b(?:endobj|endstream|xref|startxref|trailer)\b|"
+    r"%PDF-\d|"
+    r"/(?:Type|Filter|Length|Linearized|FlateDecode)\b",
+    re.IGNORECASE | re.DOTALL,
+)
 
 
 class FileParser:
@@ -45,17 +59,32 @@ class FileParser:
 
     @staticmethod
     def _extract_from_pdf(file_content: bytes) -> str:
-        """Extract text from a PDF file."""
+        """Extract text from a PDF file using pymupdf (fitz).
+
+        pymupdf produces much cleaner text than PyPDF2:
+        - Preserves reading order and layout
+        - Handles multi-column resumes
+        - Does not leak PDF internal metadata into output
+        """
         try:
-            reader = PdfReader(io.BytesIO(file_content))
+            doc = fitz.open(stream=file_content, filetype="pdf")
             text_parts: list[str] = []
 
-            for page in reader.pages:
-                page_text = page.extract_text()
+            for page in doc:
+                # Use "text" mode for clean readable output
+                page_text = page.get_text("text")
                 if page_text:
                     text_parts.append(page_text)
 
+            doc.close()
+
             text = "\n".join(text_parts).strip()
+
+            # Strip any residual PDF metadata that might have leaked
+            text = _PDF_METADATA_RE.sub("", text)
+            # Collapse excessive blank lines
+            text = re.sub(r"\n{3,}", "\n\n", text)
+            text = text.strip()
 
             if not text:
                 raise ValueError(
