@@ -74,6 +74,12 @@ _MISSING_KEYWORD_BLOCKLIST: set[str] = {
     "ideal", "preferred", "desired", "minimum", "maximum",
     "bachelor", "master", "degree", "equivalent",
     "collaborate", "collaborate", "stakeholder", "stakeholders",
+    "driving", "quality", "students", "revenue",
+    "engage", "engaged", "utilize", "utilizing",
+    "foster", "enhance", "dynamic", "innovative",
+    "cutting-edge", "world-class", "self-starter",
+    "detail-oriented", "proven", "track", "record",
+    "accountable", "accountability", "motivated", "enthusiastic",
 }
 
 # ---------------------------------------------------------------------------

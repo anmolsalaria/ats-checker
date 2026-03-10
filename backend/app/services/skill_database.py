@@ -288,4 +288,13 @@ GENERIC_STOPWORDS: set[str] = {
     "world", "life", "head", "face", "change", "much",
     "able", "key", "top", "best", "real", "full",
     "sweat", "vibe", "flow", "massive", "highway", "highways",
+    # User-reported false positives
+    "action", "driving", "quality", "students", "revenue",
+    "engage", "engaged", "engaging", "leverage", "leveraging",
+    "utilize", "utilizing", "facilitate", "facilitating",
+    "foster", "fostering", "enhance", "enhancing",
+    "dynamic", "innovative", "cutting-edge", "world-class",
+    "fast-paced", "self-starter", "detail-oriented",
+    "proven", "track", "record", "accountable", "accountability",
+    "passion", "passionate", "motivated", "enthusiastic",
 }

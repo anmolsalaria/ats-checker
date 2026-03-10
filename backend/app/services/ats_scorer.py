@@ -1,11 +1,11 @@
 """ATS scoring engine (Features 3, 8, 9).
 
-5-component weighted model:
-  Keyword Match      -> 35 %
-  Semantic Similarity-> 25 %
-  Skill Coverage     -> 20 %
-  Bullet Quality     -> 10 %
-  Resume Structure   -> 10 %
+5-component weighted model (v5 — professional ATS):
+  Keyword Match        -> 35 %
+  Semantic Similarity  -> 25 %
+  Bullet Quality       -> 20 %
+  Section Completeness -> 10 %
+  Skill Coverage       -> 10 %
 
 Also provides:
 - ATS grade mapping (Feature 9)
@@ -169,15 +169,14 @@ class ATSScorer:
         # Role detection (Feature 7)
         detected_role = self.role_detector.detect_role(job_description)
 
-        # Weighted combination (Feature 3 — 4-component professional model)
-        # Structure score is blended into skill_coverage for the final weight
-        blended_skill_score = int(0.75 * skill_coverage_score + 0.25 * structure_score)
-
+        # Weighted combination (v5 — 5-component professional ATS model)
+        # keyword=0.35, semantic=0.25, bullet=0.20, section=0.10, skill=0.10
         final = int(
             settings.KEYWORD_WEIGHT * keyword_score
             + settings.SEMANTIC_WEIGHT * semantic_score
-            + settings.SKILL_COVERAGE_WEIGHT * blended_skill_score
             + settings.BULLET_QUALITY_WEIGHT * bullet_quality_score
+            + settings.STRUCTURE_WEIGHT * structure_score
+            + settings.SKILL_COVERAGE_WEIGHT * skill_coverage_score
         )
         final = max(0, min(100, final))
 

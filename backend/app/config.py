@@ -25,12 +25,12 @@ class Settings(BaseSettings):
     SPACY_MODEL: str = "en_core_web_sm"
     SENTENCE_TRANSFORMER_MODEL: str = "all-MiniLM-L6-v2"
 
-    # Scoring weights (v4 — 4-component model, professional ATS style)
+    # Scoring weights (v5 — 5-component professional ATS model)
     KEYWORD_WEIGHT: float = 0.35
     SEMANTIC_WEIGHT: float = 0.25
-    SKILL_COVERAGE_WEIGHT: float = 0.20
     BULLET_QUALITY_WEIGHT: float = 0.20
-    STRUCTURE_WEIGHT: float = 0.00  # folded into bullet_quality & skill_coverage
+    STRUCTURE_WEIGHT: float = 0.10
+    SKILL_COVERAGE_WEIGHT: float = 0.10
 
     # File upload
     MAX_FILE_SIZE_MB: int = 10

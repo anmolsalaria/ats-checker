@@ -26,6 +26,11 @@ _MISSING_KW_BLOCKLIST: set[str] = {
     "diversity", "inclusion", "accommodation", "background", "check",
     "comply", "compliance", "regulation", "status", "veteran",
     "disability", "gender", "race", "orientation", "religion",
+    "driving", "quality", "students", "revenue",
+    "engage", "engaged", "utilize", "foster", "enhance",
+    "dynamic", "innovative", "cutting-edge", "world-class",
+    "self-starter", "detail-oriented", "proven", "track",
+    "record", "accountable", "motivated", "enthusiastic",
 }
 
 
